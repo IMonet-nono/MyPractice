@@ -1,0 +1,129 @@
+import numpy as np
+import pandas as pd
+import sklearn
+
+"""
+1、缺失值处理：部分缺失值代表“无”，用0或“None”填补；部分值使用众数填补
+2、离散值处理：将有序型变量使用(a-1)/(n-1)处理；名义型变量使用pd.get_dummy()生成虚拟变量矩阵
+3、极值点处理：极值点不多，直接扔掉；做出可视化
+4、连续型变量处理：检测数据的skewness。如果skew()值大于0.75，使用log变换；做出可视化
+"""
+
+# 查看整体数据状况
+with open('C:/Users/IMonet/Desktop/train.csv', 'r', encoding='utf-8') as f:
+    data = pd.read_csv(f)
+print(data.shape)
+
+# 查看缺失值状况
+missing = data.isnull().sum()
+missing[missing>0].sort_values(ascending = False)
+
+"""
+有些缺失值并不是没有数据，而是表示“没有”。因此，有些缺失值可以用“None”来填补
+ ["PoolQC" , "MiscFeature", "Alley", "Fence", "FireplaceQu", "GarageQual",
+ "GarageCond", "GarageFinish", "GarageYrBlt", "GarageType", "BsmtExposure",
+ "BsmtCond", "BsmtQual", "BsmtFinType2", "BsmtFinType1", "MasVnrType"]
+ """
+ 
+ miss_value = ["PoolQC" , "MiscFeature", "Alley", "Fence", "FireplaceQu", "GarageQual",
+ "GarageCond", "GarageFinish", "GarageYrBlt", "GarageType", "BsmtExposure",
+ "BsmtCond", "BsmtQual", "BsmtFinType2", "BsmtFinType1", "MasVnrType"]
+for i in miss_value:
+    data[i].fillna('None', inplace = True)
+    
+# 再次看一下还有什么缺失值
+missing_two = data.isnull().sum()
+missing_two[missing_two>0].sort_values(ascending = False)
+
+"""
+“MasVnrArea”缺失代表面积为0，所以用0填充
+“Electrical”是用电的类型，因为只有一个缺失值，所以用众数填充
+"LotFrontage"与“LotAreaCut”比较相关，故删除
+"""
+data['MasVnrArea'].fillna(0, inplace = True)
+data['Electrical'].fillna('SBrkr', inplace = True)
+data.drop(columns ='LotFrontage',inplace=True)
+print(data.shape)
+
+"""
+对名义型变量的处理：
+用pd.get_dummy()将其直接转为虚拟变量矩阵
+对有序型变量的处理：
+(a-1)/(n-1)
+
+名义型变量 = ['MSSubClass', 'MSZoning', 'Street', 'Alley', 'LotShape', 'LandContour',
+       'Utilities', 'LotConfig', 'LandSlope', 'Neighborhood', 'Condition1',
+        'Condition2', 'BldgType', 'RoofStyle', 'Functional','GarageType'
+        'RoofMatl', 'Exterior1st', 'Exterior2nd','MasVnrType','PavedDrive'
+        'Foundation', 'BsmtFinType1','Heating','CentralAir','Electrical',
+        'MiscFeature','SaleType','SaleCondition']
+有序型变量 = ['HouseStyle','ExterQual', 'ExterCond', 'BsmtQual', 'BsmtCond','GarageFinish','GarageQual'
+         'BsmtExposure', 'BsmtFinType1','BsmtFinType2','HeatingQC','KitchenQual','FirePlaceQu',
+         'GarageCond','PoolQC','Fence']
+需要去掉的变量 = ['MoSold']
+"""
+# Ex, Gd, TA, Fa, Po, None
+order_one = ['ExterQual', 'ExterCond', 'BsmtQual', 'BsmtCond',
+             'HeatingQC','KitchenQual','FireplaceQu','GarageQual',
+             'GarageCond','PoolQC']
+key_one ={'Ex':1, 'Gd':0.8, 'TA':0.6, 'Fa':0.4, 'Po':0.2, 'None':0}
+for col in order_one:
+    for key in key_one:
+        data[col].loc[data[col] == key] = key_one.get(key)
+
+# 单独处理的变量
+# Gd, Av, Mn, No, None
+data['BsmtExposure'].loc[data['BsmtExposure'] == 'Gd'] = 1
+data['BsmtExposure'].loc[data['BsmtExposure'] == 'Av'] = 0.75
+data['BsmtExposure'].loc[data['BsmtExposure'] == 'Mn'] = 0.5
+data['BsmtExposure'].loc[data['BsmtExposure'] == 'No'] = 0.25
+data['BsmtExposure'].loc[data['BsmtExposure'] == 'None'] = 0
+
+# GLQ, ALQ, BLQ, Rec, LwQ, Unf, None
+key_two = {'GLQ':1, 'ALQ':5/6, 'BLQ':4/6, 'Rec':0.5, 'LwQ':2/6, 'Unf':1/6, 'None':0}
+order_two = ['BsmtFinType1','BsmtFinType2']
+for col in order_two:
+    for key in key_two:
+        data[col].loc[data[col] == key] = key_one.get(key)
+
+# GdPrv, MnPrv, GdWo, MnWw, None
+data['Fence'].loc[data['Fence'] == 'GdPrv'] = 1
+data['Fence'].loc[data['Fence'] == 'MnPrv'] = 0.75
+data['Fence'].loc[data['Fence'] == 'GdWo'] = 0.5
+data['Fence'].loc[data['Fence'] == 'MnWw'] = 0.25
+data['Fence'].loc[data['Fence'] == 'None'] = 0
+
+data['HouseStyle'].loc[data['HouseStyle'] == '1Story'] = 2/7
+data['HouseStyle'].loc[data['HouseStyle'] == '1.5Fin'] = 4/7
+data['HouseStyle'].loc[data['HouseStyle'] == '1.5Unf'] = 3/7
+data['HouseStyle'].loc[data['HouseStyle'] == '2Story'] = 5/7
+data['HouseStyle'].loc[data['HouseStyle'] == '2.5Fin'] = 1
+data['HouseStyle'].loc[data['HouseStyle'] == '2.5Unf'] = 6/7
+data['HouseStyle'].loc[data['HouseStyle'] == 'SFoyer'] = 1/7
+data['HouseStyle'].loc[data['HouseStyle'] == 'SLvl'] = 0
+
+data['GarageFinish'].loc[data['GarageFinish'] == 'Fin'] = 1
+data['GarageFinish'].loc[data['GarageFinish'] == 'RFn'] = 2/3
+data['GarageFinish'].loc[data['GarageFinish'] == 'Unf'] = 1/3
+data['GarageFinish'].loc[data['GarageFinish'] == 'None'] = 0
+# 去掉“月份”
+data.drop(columns ='MoSold',inplace=True)
+
+# 可视化
+data.plot(kind="scatter",x='LotArea', y='SalePrice',alpha = 0.2)
+# 去掉数据中SalePrice大于700000的值,还有面积很大但售价很低的极端值
+data = data[-((data.SalePrice < 500000) &  (data.LotArea > 200000))]
+
+# 转化名义型变量
+name_var = ['MSSubClass', 'MSZoning', 'Street', 'Alley', 'LotShape', 'LandContour',
+       'Utilities', 'LotConfig', 'LandSlope', 'Neighborhood', 'Condition1',
+        'Condition2', 'BldgType', 'RoofStyle', 'Functional','GarageType'
+        'RoofMatl', 'Exterior1st', 'Exterior2nd','MasVnrType','PavedDrive'
+        'Foundation', 'BsmtFinType1','Heating','CentralAir','Electrical',
+        'MiscFeature','SaleType','SaleCondition']
+for col in name_var:
+    temp = pd.get_dummies(data[col], prefix = col)
+    data = data.join(temp)
+    data = data.drop(col, axis=1)
+# 看看现在的数据集形状
+print(data.shape)
